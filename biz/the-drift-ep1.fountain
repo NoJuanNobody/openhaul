@@ -1,0 +1,158 @@
+Title: The Drift: Miles to Go
+Episode: 101 - "Cold Chain"
+Author: OpenHaul Creative & Media Collective
+Format: Fountain Screenplay
+
+EXT. PACIFIC COAST HIGHWAY - BIG SUR - DUSK
+
+Rain hammers the cracked asphalt of Highway 1. Ocean waves smash violently against the jagged cliffs four hundred feet below. 
+
+A lone 2021 high-roof Mercedes Sprinter van—battered, gray, customized with auxiliary roof antennas, external diesel heater exhaust, and heavy all-terrain tires—cuts through dense fog.
+
+INT. SPRINTER VAN - CABIN - CONTINUOUS
+
+LEO CARTER (38) grips the leather-wrapped steering wheel. Weathered hands, cuticles stained with mechanical grease, wedding ring worn thin. He wears a faded canvas jacket over a dark thermal henley.
+
+On the custom center dashboard mount, an iPad ruggedized in a military-spec case displays the OPENHAUL APP:
+
+SCREEN UI:
+>> STATE: IN_CUSTODY_RFID_VERIFIED
+>> MANIFEST #OH-88219-MED
+>> PAYLOAD: PEDIATRIC INSULIN & WHOLE BLOOD UNITS (COLD-CHAIN)
+>> TEMP SENSORS: 3.4°C [SAFE: 2.0°C - 8.0°C]
+>> CELLULAR SIGNAL: NONE (0 BARS)
+>> MESH PROTOCOL: P2P STMP ACTIVE [3 PEERS IN RANGE]
+
+Beside the iPad, a small handheld UHF RFID scanner rests in a 3D-printed cradle, its green LED pulsing in rhythm with the cabin's ambient heater.
+
+LEO
+(muttering to himself)
+Come on, sweet girl. Hold the line. Forty miles to Monterey.
+
+Through the windshield, a FLASH OF LIGHTNING illuminates a mudslide warning sign hanging sideways off a guardrail. 
+
+Behind Leo's seat, behind the steel partition, a LOW-PITCHED HUM vibrates through the chassis: the van's dedicated secondary lithium bank powering the mobile Norcold medical refrigeration cooler.
+
+Suddenly—BEEP-BEEP-BEEP.
+
+The iPad screen flashes AMBER:
+
+>> WARNING: THERMAL EXCURSION ALERT
+>> CARGO TEMP: 6.8°C (RISING: +0.4°C / MIN)
+>> COMPRESSOR VOLTAGE DROP: 11.2V
+
+Leo's eyes widen. He glances into his rearview mirror. 
+
+LEO
+No. Not today.
+
+EXT. PCH TURNOUT - MOMENTS LATER
+
+The van screeches to a stop in a gravel turnaround carved into the cliffside. Hazard lights amber-strobe the torrential rain.
+
+Leo kicks the driver door open, throwing on a hooded slicker, and bounds out into the deluge.
+
+INT. SPRINTER VAN - CARGO BAY - CONTINUOUS
+
+Leo slides open the heavy side door. The air inside smells of ozone, neoprene, and cold steel.
+
+In the center of the bay, strapped down with heavy ratchet webbing, sits a stainless-steel medical transport pod. 
+
+A digital thermometer on the pod reads: 7.1°C.
+
+Leo drops to his knees, ripping off his neoprene work gloves. He grabs an Allen wrench from a magnetic tool wall and pops the electrical access panel off the auxiliary lithium battery rack.
+
+A 200-amp ANL fuse is glowing cherry red—nearly melted through from a loose terminal vibration.
+
+LEO
+Vibration shook the lug loose. 
+
+He pulls an insulated ratchet and a spare gold-plated fuse from his vest. His hands are soaked, rain dripping from his eyelashes. 
+
+EXT. HIGHWAY 1 - CONTINUOUS
+
+Wind howls, shaking the entire van on its suspension. Small rocks tumble down the cliffside, clattering across the van's roof.
+
+INT. SPRINTER VAN - CARGO BAY - CONTINUOUS
+
+Leo wrenches the melted fuse free with a sharp SNAP. Sparks kick off the contact. 
+
+He slams the fresh fuse into the busbar, tightens the lug with three deliberate, torqued turns.
+
+CLACK.
+
+The auxiliary inverter kicks back to life. A high-pitched fan whirrs. The refrigeration compressor thuds into gear.
+
+On the transport pod, the temperature display stabilizes: 6.9°C... 6.5°C... 5.8°C... 4.2°C.
+
+Leo exhales a heavy breath of steam. 
+
+He picks up his handheld scanner, aims it at the pod's UHF RFID tag, and pulls the trigger.
+
+BEEP.
+
+The scanner display reads:
+>> RFID HASH MATCH: 0x9FA2...77C
+>> ZK-PROOF GENERATED: CUSTODY UNBROKEN
+>> TEMP SLA PRESERVED
+
+Leo taps the iPad on his forearm bracket:
+>> DISPATCH BROADCAST VIA STMP MESH:
+>> MONTEREY CLINIC INFORMED: ETA 34 MIN
+
+INT. SPRINTER VAN - CABIN - MOMENTS LATER
+
+Leo climbs back behind the wheel, soaked, wiping rain from his face with a towel. 
+
+He puts the Sprinter into drive. The tires grip the wet gravel and pull back onto Highway 1, charging forward into the stormy night.
+
+DISSOLVE TO:
+
+EXT. MONTEREY COUNTY EMERGENCY CLINIC - NIGHT
+
+A line of storm-displaced families waits beneath a temporary FEMA canvas awning in the parking lot. The clinic's emergency generator hums under a tarp.
+
+DR. ELENA VANCE (45, scrubs under a yellow rain poncho) stands by the clinic receiving dock, checking her tablet with a look of quiet exhaustion.
+
+Through the rain, twin headlights cut through the darkness. Leo's Sprinter rolls up to the dock and stops.
+
+Leo jumps down, walks to the rear cargo doors, and swings them wide open.
+
+DR. VANCE
+Tell me you've got the cold units, Leo. The distributor in Salinas called it off six hours ago. Said the road was impassable.
+
+LEO
+Salinas doesn't drive a Sprinter.
+
+Leo reaches inside and slides out the sealed stainless-steel transport pod. 
+
+Elena raises her own clinic smartphone. The two devices chirp simultaneously as the cryptographic Bluetooth handshake completes.
+
+CLINIC PHONE SCREEN:
+>> OPENHAUL PROTOCOL HANDSHAKE VERIFIED
+>> PROOF: ZK-SNARK #7701-TEMP-VALIDATED
+>> IN_CUSTODY TRANSFERRED -> MONTEREY CLINIC
+>> DRIVER PAYOUT ESCROW RELEASED: $148.50
+
+Dr. Vance inspects the cold pod's tamper seal. She looks up at Leo, her face breaking into profound relief.
+
+DR. VANCE
+Unbroken cold chain. You saved sixty kids tonight, Leo.
+
+Leo smiles faintly, nodding with humble respect.
+
+LEO
+Just doing my run, Doc. Just doing my run.
+
+He closes the rear van doors with a solid THUD. 
+
+Leo steps back into the cab, connects his seatbelt, and taps the OpenHaul app.
+
+APP SCREEN:
+>> STATUS: IDLE
+>> NEW BROADCAST DISPATCH: FEMA RELIEF POD #99 - BIG SUR FIRE STATION
+>> ACCEPT? [YES]
+
+Leo taps [YES]. The engine roars. The van pulls away into the rain.
+
+FADE OUT.

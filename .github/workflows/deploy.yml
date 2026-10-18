@@ -1,0 +1,39 @@
+name: OpenHaul Cloud Deploy (AWS EKS & Modal)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_env:
+        description: 'Target Environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production-govcloud
+          - modal-burst-sim
+
+jobs:
+  deploy-to-cloud:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure AWS Credentials
+        if: ${{ inputs.target_env != 'modal-burst-sim' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: us-east-1
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+      - name: Deploy Kubernetes Manifests via Helm & Karpenter
+        if: ${{ inputs.target_env != 'modal-burst-sim' }}
+        run: |
+          aws eks update-kubeconfig --name openhaul-eks-prod --region us-east-1
+          helm upgrade --install openhaul-dispatch ./infra/helm/openhaul --namespace openhaul --create-namespace
+      - name: Deploy Serverless Burst to Modal
+        if: ${{ inputs.target_env == 'modal-burst-sim' }}
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+        run: |
+          pip install modal
+          modal deploy infra/modal_burst_runner.py

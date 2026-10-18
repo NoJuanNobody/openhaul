@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "crates/stmp-core",
+    "crates/zk-custody",
+]
+resolver = "2"
