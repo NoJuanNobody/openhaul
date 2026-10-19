@@ -2,7 +2,34 @@
 
 import unittest
 from python.chaos_sim.generator import SimulationScenario, TelemetryGenerator
-from python.chaos_sim.runner import ChaosRunner
+from python.chaos_sim.runner import (
+    ChaosRunner,
+    cold_chain_breach_detected,
+    is_replayed_scan,
+)
+
+
+class TestColdChainDetector(unittest.TestCase):
+    def test_three_consecutive_breaches_detected(self):
+        self.assertTrue(cold_chain_breach_detected([4.0, 9.5, 10.1, 11.0, 5.0]))
+
+    def test_breaches_broken_by_in_range_readings_not_detected(self):
+        self.assertFalse(cold_chain_breach_detected([9.0, 9.5, 5.0, 9.1, 9.2, 4.0, 10.0]))
+
+    def test_entirely_in_range_not_detected(self):
+        self.assertFalse(cold_chain_breach_detected([2.0, 5.0, 8.0, 3.5, 7.9]))
+
+
+class TestRfidReplayDetector(unittest.TestCase):
+    def test_replayed_scan_is_flagged(self):
+        seen: set = set()
+        self.assertFalse(is_replayed_scan(seen, "abc"))
+        self.assertTrue(is_replayed_scan(seen, "abc"))
+
+    def test_fresh_scan_is_not_flagged(self):
+        seen = {"abc"}
+        self.assertFalse(is_replayed_scan(seen, "def"))
+        self.assertIn("def", seen)
 
 
 class TestChaosSim(unittest.TestCase):

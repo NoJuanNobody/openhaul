@@ -1,14 +1,34 @@
 """
-Bipartite welfare maximization solver matching drivers to delivery requests.
-Accounts for deadhead transit time, capacity constraints, cold-chain compatibility,
-and disaster triage priority tiers (Standard, Expedited, MedicalCritical, FEMA).
+Driver-to-request matching for the Python dispatch loop.
+
+The matching rules (priority multipliers, deadhead cost, capacity feasibility,
+greedy non-overlapping assignment) live only in the Rust crate `crates/stmp-core`.
+This module serializes drivers and requests to JSON, runs the `stmp_match` binary,
+and maps the result back onto the Python dataclasses. It contains no weighting logic.
+
+Binary lookup:
+  1. `OPENHAUL_STMP_MATCH_BIN` if set (must be an existing executable file).
+  2. `<repo>/target/debug/stmp_match`, produced by `cargo build --bin stmp_match`.
+A missing binary raises RuntimeError. There is no Python fallback.
 """
 
 from __future__ import annotations
+
+import json
 import math
+import os
+import subprocess
 from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import Dict, List, Optional, Set, Tuple
+from pathlib import Path
+from typing import Dict, List, Optional, Union
+
+BIN_ENV_VAR = "OPENHAUL_STMP_MATCH_BIN"
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_BIN_PATH = _REPO_ROOT / "target" / "debug" / "stmp_match"
+
+# Python's H3 cells are 15-hex-digit res-8 strings; the Rust wire format needs the resolution.
+H3_RESOLUTION = 8
 
 
 class PriorityTier(IntEnum):
@@ -16,6 +36,15 @@ class PriorityTier(IntEnum):
     EXPEDITED = 2
     MEDICAL_CRITICAL = 3
     DISASTER_TRIAGE_FEMA = 4
+
+
+# Serde variant names of stmp_core::PriorityLevel.
+_RUST_PRIORITY_NAMES = {
+    PriorityTier.STANDARD: "Standard",
+    PriorityTier.EXPEDITED: "Expedited",
+    PriorityTier.MEDICAL_CRITICAL: "MedicalCritical",
+    PriorityTier.DISASTER_TRIAGE_FEMA: "DisasterTriageFema",
+}
 
 
 @dataclass
@@ -96,45 +125,71 @@ class MatchResult:
     welfare_score: float
 
 
+def resolve_match_binary(path: Union[str, os.PathLike, None] = None) -> Path:
+    """Returns the stmp_match path, or raises RuntimeError if it is not an executable file."""
+    if path is None:
+        override = os.environ.get(BIN_ENV_VAR)
+        path = override if override else DEFAULT_BIN_PATH
+    candidate = Path(path)
+    if not (candidate.is_file() and os.access(candidate, os.X_OK)):
+        raise RuntimeError(
+            f"stmp_match binary not found or not executable at {candidate}. "
+            "Build it from the repo root with `cargo build --bin stmp_match`, "
+            f"or set {BIN_ENV_VAR} to its path."
+        )
+    return candidate
+
+
+def _coord_to_wire(c: Coordinate) -> dict:
+    return {"lat": c.lat, "lng": c.lng}
+
+
+def _cell_to_wire(index_hex: str) -> dict:
+    return {"index_hex": index_hex, "resolution": H3_RESOLUTION}
+
+
+def _driver_to_wire(d: Driver) -> dict:
+    return {
+        "driver_id": d.driver_id,
+        "max_weight_lbs": d.max_weight_lbs,
+        "available_weight_lbs": d.available_weight_lbs,
+        "max_volume_cuft": d.max_volume_cuft,
+        "available_volume_cuft": d.available_volume_cuft,
+        "cold_chain_capable": d.cold_chain_capable,
+        "current_location": _coord_to_wire(d.current_location),
+        "current_cell": _cell_to_wire(d.current_h3_cell),
+        # The Rust matcher does not read trajectories; the wire field is kept empty.
+        "planned_trajectory": [],
+        "is_online": d.is_online,
+    }
+
+
+def _request_to_wire(r: DeliveryRequest) -> dict:
+    return {
+        "request_id": r.request_id,
+        "pickup_location": _coord_to_wire(r.pickup_location),
+        "pickup_cell": _cell_to_wire(r.pickup_h3_cell),
+        "dropoff_location": _coord_to_wire(r.dropoff_location),
+        "dropoff_cell": _cell_to_wire(r.dropoff_h3_cell),
+        "weight_lbs": r.weight_lbs,
+        "volume_cuft": r.volume_cuft,
+        "requires_cold_chain": r.requires_cold_chain,
+        "min_temp_celsius": r.min_temp_celsius,
+        "max_temp_celsius": r.max_temp_celsius,
+        "priority": _RUST_PRIORITY_NAMES[PriorityTier(r.priority)],
+        "deadline_epoch_s": int(r.deadline_epoch_s),
+        "payout_usd": r.payout_usd,
+    }
+
+
 class BipartiteMatcher:
     """
-    Solves bipartite matching between drivers and delivery requests to maximize
-    social and operational welfare.
+    Thin client for the Rust matcher. Each call to `match` runs `stmp_match` once
+    with the current drivers and requests on stdin.
     """
 
-    def __init__(self, deadhead_weight: float = 0.85, max_deadhead_km: float = 40.0):
-        self.deadhead_weight = deadhead_weight
-        self.max_deadhead_km = max_deadhead_km
-
-    def compute_edge_welfare(self, driver: Driver, request: DeliveryRequest) -> Optional[MatchResult]:
-        if not driver.can_accommodate(request):
-            return None
-
-        deadhead = driver.current_location.distance_km(request.pickup_location)
-        if deadhead > self.max_deadhead_km:
-            return None
-
-        delivery_dist = request.pickup_location.distance_km(request.dropoff_location)
-
-        # Priority weights strongly prioritize life-safety / FEMA disaster cargo
-        priority_multipliers = {
-            PriorityTier.STANDARD: 1.0,
-            PriorityTier.EXPEDITED: 1.6,
-            PriorityTier.MEDICAL_CRITICAL: 3.0,
-            PriorityTier.DISASTER_TRIAGE_FEMA: 6.0,
-        }
-        multiplier = priority_multipliers.get(request.priority, 1.0)
-
-        # Objective: Maximize priority-weighted payout minus deadhead transit cost
-        welfare = (request.payout_usd * multiplier) - (deadhead * self.deadhead_weight) + (delivery_dist * 0.15)
-
-        return MatchResult(
-            driver_id=driver.driver_id,
-            request_id=request.request_id,
-            deadhead_km=deadhead,
-            delivery_km=delivery_dist,
-            welfare_score=welfare,
-        )
+    def __init__(self, binary_path: Union[str, os.PathLike, None] = None):
+        self.binary_path = resolve_match_binary(binary_path)
 
     def match(
         self,
@@ -142,31 +197,48 @@ class BipartiteMatcher:
         requests: Dict[str, DeliveryRequest],
     ) -> List[MatchResult]:
         """
-        Executes maximum welfare matching with priority triage ordering.
-        Returns non-conflicting assignments of driver -> request.
+        Returns non-conflicting driver -> request assignments, highest welfare first.
+        Matched drivers have their capacity decremented, as before.
         """
-        candidate_edges: List[MatchResult] = []
+        if not drivers or not requests:
+            return []
 
-        for driver in drivers.values():
-            for req in requests.values():
-                res = self.compute_edge_welfare(driver, req)
-                if res is not None:
-                    candidate_edges.append(res)
+        payload = {
+            "drivers": [_driver_to_wire(d) for d in drivers.values()],
+            "requests": [_request_to_wire(r) for r in requests.values()],
+        }
+        proc = subprocess.run(
+            [str(self.binary_path)],
+            input=json.dumps(payload),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if proc.returncode != 0:
+            raise RuntimeError(
+                f"stmp_match exited with status {proc.returncode}: {proc.stderr.strip()}"
+            )
+        try:
+            output = json.loads(proc.stdout)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"stmp_match produced invalid JSON: {exc}") from exc
 
-        # Sort candidate edges by descending welfare score
-        candidate_edges.sort(key=lambda edge: edge.welfare_score, reverse=True)
-
-        assigned_drivers: Set[str] = set()
-        assigned_requests: Set[str] = set()
-        matches: List[MatchResult] = []
-
-        for edge in candidate_edges:
-            if edge.driver_id not in assigned_drivers and edge.request_id not in assigned_requests:
-                driver = drivers[edge.driver_id]
-                req = requests[edge.request_id]
-                if driver.allocate(req):
-                    assigned_drivers.add(edge.driver_id)
-                    assigned_requests.add(edge.request_id)
-                    matches.append(edge)
-
-        return matches
+        results: List[MatchResult] = []
+        for edge in output["matches"]:
+            driver = drivers[edge["driver_id"]]
+            request = requests[edge["request_id"]]
+            if not driver.allocate(request):
+                raise RuntimeError(
+                    f"stmp_match assigned {driver.driver_id} to {request.request_id}, "
+                    "but the Python capacity check rejects it; the two sides disagree."
+                )
+            results.append(
+                MatchResult(
+                    driver_id=edge["driver_id"],
+                    request_id=edge["request_id"],
+                    deadhead_km=edge["deadhead_distance_km"],
+                    delivery_km=edge["delivery_distance_km"],
+                    welfare_score=edge["welfare_score"],
+                )
+            )
+        return results

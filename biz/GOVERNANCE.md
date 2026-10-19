@@ -99,3 +99,28 @@ To balance agility in market deployment with mathematical security and decentral
 In the event of an active zero-day vulnerability, cryptographic exploit, or catastrophic physical network failure during a FEMA disaster mobilization:
 - **Emergency Hotfix Authority:** A 5-of-9 threshold of Tier 1 Core Maintainers can activate the **Protocol Circuit Breaker**, pausing state-machine updates or routing payments through a secure escrow freeze for a maximum period of 72 hours.
 - **Post-Incident Review:** Within 7 calendar days of an emergency action, a full public post-mortem and independent audit report must be published by Tier 2 auditors, followed by an immediate community ratification vote.
+
+---
+
+## 5. Driver Pay Transparency and Incident Response
+
+### 5.1 Published Pay Formula
+- **Formula:** Driver net payout = mission price × driver share. The published bid-kit schedule uses an 82% driver share and an 18% take rate for the standard regional storm rate (Bid Kit §5). The catastrophic surge tier is 85% / 15%, as set out in the same schedule.
+- **Open item:** Section 2 of this charter cites a default 22% take rate. This does not match the 18% bid-kit rate. [OWNER TO CONFIRM WHICH TAKE RATE APPLIES TO NON-FEMA ORDERS]
+- The formula, driver share, and take rate are published to every driver before acceptance of an order.
+
+### 5.2 Dispute Log
+- Every pay, custody, or RFID dispute is entered in a dispute log with a UTC timestamp, the driver and manifest identifiers, the amount or event disputed, and the resolution.
+- Entries are append-only. Corrections are added as new entries and do not overwrite earlier ones.
+- A driver may request a copy of their own entries at any time.
+
+### 5.3 Who Is Called
+| Event | First contact | Second contact |
+| :--- | :--- | :--- |
+| Crash or collision | Emergency services (911), then [INCIDENT LEAD NAME, PHONE] | [CLAIMS CONTACT NAME, PHONE] and the HNOA insurer [CONTACT, PHONE] |
+| Cold-chain failure (temperature excursion) | [COLD-CHAIN ON-CALL NAME, PHONE] | [FEMA LOGISTICS CONTACT NAME, PHONE] where a FEMA manifest is active |
+| RFID or custody dispute | [CUSTODY OPERATIONS NAME, PHONE] | [DISPUTE LOG OWNER NAME, PHONE] |
+
+### 5.4 Custody Records Preservation
+- For any crash, cold-chain failure, or RFID dispute, the STMP event logs, RFID custody handshakes, GPS route hashes, and sensor proofs for the affected manifest are placed on hold and are not deleted by routine retention.
+- Hold period: [RETENTION PERIOD — COUNSEL TO CONFIRM]. [COUNSEL TO CONFIRM PRESERVATION OBLIGATIONS]

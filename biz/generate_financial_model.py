@@ -10,7 +10,7 @@ Reflects baseline metrics from the 82-turn chat:
 - Net Contribution Margin: $4.19 per order (Take rate $6.16 - variable gateway/insurance/cloud cost $1.97)
 - Y1 Operating Expenses: $1,860,000
 - Expansion: 1 Market (Y1) -> 5 Markets (Y2) -> 15 Markets (Y3)
-- Year 3 Target: ~$23.5M EBITDA (36%+ EBITDA margin)
+- Year 3 Target: ~$23.5M EBITDA (44%+ EBITDA margin)
 - Surge & FEMA Emergency Logistics Sensitivity:
   - Regional Storm Surge (14-day localized surge)
   - Superstorm / Hurricane Relief Scenario ($26B Katrina-scale federal emergency logistics pool sensitivity)
@@ -94,7 +94,8 @@ def build_financial_model(output_path: str):
         
         # Profitability & Margins
         ("EBITDA ($)", "=B16-B22", "=C16-C22", "=D16-D22", "Target: ~$23.5M Y3"),
-        ("EBITDA Margin (% of Gross Protocol Revenue)", "=B23/B11", "=C23/C11", "=D23/D11", "Target: 36%+ Y3 (44.9%)"),
+        # Denominator is Gross Protocol Revenue (take, row 11), not GMV. Y3 = 23.515M / 52.36M = 44.9%, floored to 44%.
+        ("EBITDA Margin (% of Gross Protocol Revenue)", "=B23/B11", "=C23/C11", "=D23/D11", "Target: 44%+ Y3 (44.9%)"),
         ("Depreciation, Amortization & Taxes", 35000, 850000, 4800000, "Effective Tax ~21%"),
         ("Net Operating Income / (Loss)", "=B23-B25", "=C23-C25", "=D23-D25", "Net Cash Generation")
     ]

@@ -193,17 +193,74 @@ class ChaosRunner:
 
     def verify_rfid_replay_defense(self) -> bool:
         """
-        Verifies that an injected duplicate/forged RFID signature is flagged and rejected.
+        Replays a real scan commitment twice; passes only if the first scan is accepted,
+        the replay is flagged, and a fresh scan is accepted.
         """
-        forged_sig = "REPLAY_ATTACK_INVALID_FORGED"
-        # Mimic verification logic from zk-custody
-        return not forged_sig.startswith("3045") and forged_sig.startswith("REPLAY_ATTACK_INVALID")
+        seen: set = set()
+        scan = "scan:tag-0042:nonce-1"
+        first_flagged = is_replayed_scan(seen, scan)
+        replay_flagged = is_replayed_scan(seen, scan)
+        fresh_flagged = is_replayed_scan(seen, "scan:tag-0042:nonce-2")
+        return (not first_flagged) and replay_flagged and (not fresh_flagged)
 
     def verify_cold_chain_defense(self) -> bool:
         """
-        Verifies that consecutive thermal breach telemetry switches custody status to Disputed.
+        Injects a thermal excursion into a generated telemetry series and checks that
+        the breach detector flags it.
         """
-        telemetry_spikes = [14.5, 15.0, 16.2]
-        max_allowed = 8.0
-        consecutive_breaches = sum(1 for t in telemetry_spikes if t > max_allowed)
-        return consecutive_breaches >= 3
+        rng = random.Random(7)
+        readings = [round(rng.uniform(3.0, 7.0), 2) for _ in range(20)]
+        for i in range(10, 13):  # three consecutive out-of-range readings
+            readings[i] = round(rng.uniform(9.0, 16.0), 2)
+        return cold_chain_breach_detected(readings)
+
+
+def cold_chain_breach_detected(
+    readings_c: List[float], min_c: float = 2.0, max_c: float = 8.0, consecutive: int = 3
+) -> bool:
+    """True when `consecutive` readings in a row fall outside [min_c, max_c]."""
+    run = 0
+    for t in readings_c:
+        if t < min_c or t > max_c:
+            run += 1
+            if run >= consecutive:
+                return True
+        else:
+            run = 0
+    return False
+
+
+def is_replayed_scan(seen_commitments: set, commitment: str) -> bool:
+    """True if `commitment` was already seen; otherwise records it and returns False."""
+    if commitment in seen_commitments:
+        return True
+    seen_commitments.add(commitment)
+    return False
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Run OpenHaul chaos experiments.")
+    parser.add_argument("--scenario", default="katrina", choices=["katrina"])
+    parser.add_argument("--fleet-dropout", type=float, default=0.40)
+    parser.add_argument("--fleet-size", type=int, default=120)
+    parser.add_argument("--request-count", type=int, default=80)
+    parser.add_argument("--verify-invariants", action="store_true")
+    args = parser.parse_args(argv)
+
+    report = ChaosRunner().run_hurricane_katrina_chaos(
+        fleet_size=args.fleet_size,
+        request_count=args.request_count,
+        dropout_ratio=args.fleet_dropout,
+    )
+    print(report)
+    if args.verify_invariants and not report.passed_all_invariants:
+        print("INVARIANTS FAILED")
+        return 1
+    print("INVARIANTS PASSED" if report.passed_all_invariants else "Run complete (invariants not checked)")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

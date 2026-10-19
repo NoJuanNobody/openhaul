@@ -44,9 +44,9 @@ openhaul/
 
 ### `zk-custody` (Zero-Knowledge Chain-of-Custody)
 - **HNOA State Machine**: Hired and Non-Owned Auto insurance transitions (`IDLE` -> `EN_ROUTE` -> `IN_CUSTODY_RFID_VERIFIED` -> `COMPLETED`, or `DISPUTED_EXCURSION`).
-- **RFID Scan Commitment**: SHA-256 / Poseidon cryptographic commitments binding driver identity, package RFID tag, reader public key, and H3 location.
+- **RFID Scan Commitment**: SHA-256 hash commitment binding driver identity, package RFID tag, reader public key, and H3 location. RFID signature verification is simulated (string-based check), not cryptographic.
 - **Cold-Chain Invariant Monitoring**: Ingestion and verification of temperature telemetry thresholds (e.g. 2.0°C – 8.0°C).
-- **ZK-SNARK Proofs**: Verifies physical custody handover and thermal compliance without leaking driver GPS routes or PII.
+- **Integrity commitment (SHA-256, simulated proof object — not zero-knowledge; real Groth16 circuit planned)**: `CustodyZkProof::generate_proof` produces a SHA-256 hash over custody and thermal data that anyone can recompute. Privacy (no leaking driver GPS routes or PII) is a planned property, not implemented.
 
 ---
 
@@ -78,6 +78,7 @@ python3 -m unittest discover -s python/tests
 *Result: 6 unit/integration tests passed in <0.02s.*
 
 ### Benchmark Performance
+*Benchmark numbers come from synthetic simulation (`chaos_sim`), not real telemetry.*
 - **Matching Loop Latency**: ~4–10ms per tick (far below the 2,000ms threshold).
 - **Normal Metro Match Rate**: 100% on-time matching.
 - **Disaster Surge (40% Fleet Dropouts)**: 100% capacity invariant compliance, zero double dispatch, 100% malicious RFID replay rejection, and prioritizing FEMA critical cargo.

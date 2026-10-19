@@ -19,7 +19,9 @@ impl Coordinate {
         let d_lat = (other.lat - self.lat).to_radians();
         let d_lng = (other.lng - self.lng).to_radians();
         let a = (d_lat / 2.0).sin().powi(2)
-            + self.lat.to_radians().cos() * other.lat.to_radians().cos() * (d_lng / 2.0).sin().powi(2);
+            + self.lat.to_radians().cos()
+                * other.lat.to_radians().cos()
+                * (d_lng / 2.0).sin().powi(2);
         let c = 2.0 * a.sqrt().atan2((1.0 - a).sqrt());
         r * c
     }
@@ -40,23 +42,28 @@ impl H3Cell {
         }
     }
 
-    /// Computes grid ring distance approximation between two H3 indices.
+    /// Parses `index_hex` into an h3o `CellIndex`.
+    fn to_cell_index(&self) -> Option<h3o::CellIndex> {
+        let raw = u64::from_str_radix(&self.index_hex, 16).ok()?;
+        h3o::CellIndex::try_from(raw).ok()
+    }
+
+    /// Grid (k-ring) distance in cells between two H3 indices, computed with h3o.
+    ///
+    /// Returns `u32::MAX` when either index fails to parse, when the two cells
+    /// are at different resolutions, or when h3o cannot define a grid distance
+    /// between them (for example, cells on different base cells or pentagon
+    /// distortion cases where the local IJ coordinate system is undefined).
     pub fn grid_distance(&self, other: &H3Cell) -> u32 {
-        if self.index_hex == other.index_hex {
-            return 0;
+        let (Some(a), Some(b)) = (self.to_cell_index(), other.to_cell_index()) else {
+            return u32::MAX;
+        };
+        if a.resolution() != b.resolution() {
+            return u32::MAX;
         }
-        // Approximate distance based on hex integer diff or fallback
-        let a = u64::from_str_radix(&self.index_hex, 16).unwrap_or(0);
-        let b = u64::from_str_radix(&other.index_hex, 16).unwrap_or(0);
-        let diff = (a as i64 - b as i64).unsigned_abs();
-        if diff == 0 {
-            0
-        } else if diff < 16 {
-            1
-        } else if diff < 64 {
-            2
-        } else {
-            ((diff as f64).log2().max(1.0)) as u32
+        match a.grid_distance(b) {
+            Ok(d) => u32::try_from(d).unwrap_or(u32::MAX),
+            Err(_) => u32::MAX,
         }
     }
 }
@@ -130,6 +137,24 @@ pub enum PriorityLevel {
     DisasterTriageFema = 4,
 }
 
+/// Welfare multiplier applied to payout for `PriorityLevel::DisasterTriageFema`.
+/// This is the single source of the FEMA weight; Python does not duplicate it.
+pub const FEMA_TRIAGE_WELFARE_MULTIPLIER: f64 = 6.0;
+
+pub const DEADHEAD_CUTOFF_KM: f64 = 40.0;
+
+impl PriorityLevel {
+    /// Multiplier applied to a request's payout when scoring welfare.
+    pub const fn welfare_multiplier(self) -> f64 {
+        match self {
+            PriorityLevel::Standard => 1.0,
+            PriorityLevel::Expedited => 1.5,
+            PriorityLevel::MedicalCritical => 2.5,
+            PriorityLevel::DisasterTriageFema => FEMA_TRIAGE_WELFARE_MULTIPLIER,
+        }
+    }
+}
+
 /// Delivery request specification.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeliveryRequest {
@@ -154,6 +179,7 @@ pub struct MatchEdge {
     pub driver_id: String,
     pub request_id: String,
     pub deadhead_distance_km: f64,
+    pub delivery_distance_km: f64,
     pub welfare_score: f64,
     pub is_feasible: bool,
 }
@@ -188,33 +214,35 @@ impl BipartiteGraph {
                     continue;
                 }
                 let deadhead = driver.current_location.distance_to(&req.pickup_location);
+                if deadhead > DEADHEAD_CUTOFF_KM {
+                    continue;
+                }
                 let delivery_dist = req.pickup_location.distance_to(&req.dropoff_location);
 
                 // Welfare formulation:
                 // Base reward from payout and priority multiplier, penalized by deadhead distance
-                let priority_multiplier = match req.priority {
-                    PriorityLevel::Standard => 1.0,
-                    PriorityLevel::Expedited => 1.5,
-                    PriorityLevel::MedicalCritical => 2.5,
-                    PriorityLevel::DisasterTriageFema => 5.0,
-                };
-
-                let welfare_score = (req.payout_usd * priority_multiplier) - (deadhead * 0.75) + (delivery_dist * 0.2);
+                let welfare_score = (req.payout_usd * req.priority.welfare_multiplier())
+                    - (deadhead * 0.75)
+                    + (delivery_dist * 0.2);
 
                 self.candidate_edges.push(MatchEdge {
                     driver_id: d_id.clone(),
                     request_id: r_id.clone(),
                     deadhead_distance_km: deadhead,
+                    delivery_distance_km: delivery_dist,
                     welfare_score,
                     is_feasible: true,
                 });
             }
         }
-        // Sort candidate edges descending by welfare score
+        // Sort candidate edges descending by welfare score; ties break on ids so the
+        // result does not depend on HashMap iteration order.
         self.candidate_edges.sort_by(|a, b| {
             b.welfare_score
                 .partial_cmp(&a.welfare_score)
                 .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.driver_id.cmp(&b.driver_id))
+                .then_with(|| a.request_id.cmp(&b.request_id))
         });
     }
 
@@ -225,7 +253,9 @@ impl BipartiteGraph {
         let mut assignments = Vec::new();
 
         for edge in &self.candidate_edges {
-            if !assigned_drivers.contains(&edge.driver_id) && !assigned_requests.contains(&edge.request_id) {
+            if !assigned_drivers.contains(&edge.driver_id)
+                && !assigned_requests.contains(&edge.request_id)
+            {
                 assigned_drivers.insert(edge.driver_id.clone());
                 assigned_requests.insert(edge.request_id.clone());
                 assignments.push(edge.clone());
@@ -235,9 +265,81 @@ impl BipartiteGraph {
     }
 }
 
+/// Wire input for one matching pass (the JSON document read by `stmp_match`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MatchInput {
+    pub drivers: Vec<DriverCapacityMatrix>,
+    pub requests: Vec<DeliveryRequest>,
+}
+
+/// Wire output for one matching pass (the JSON document written by `stmp_match`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MatchOutput {
+    pub matches: Vec<MatchEdge>,
+}
+
+/// Builds the bipartite graph, scores feasible edges, and returns the greedy
+/// welfare-maximizing non-overlapping assignment.
+pub fn run_matching(input: MatchInput) -> MatchOutput {
+    let mut graph = BipartiteGraph::new();
+    for driver in input.drivers {
+        graph.add_driver(driver);
+    }
+    for request in input.requests {
+        graph.add_request(request);
+    }
+    graph.compute_candidate_edges();
+    MatchOutput {
+        matches: graph.solve_greedy_welfare_max(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const FEMA_VS_STANDARD: &str = include_str!("../tests/fixtures/fema_vs_standard.json");
+
+    #[test]
+    fn match_json_fixture_round_trip_prefers_fema() {
+        let input: MatchInput = serde_json::from_str(FEMA_VS_STANDARD).expect("fixture parses");
+        let output = run_matching(input);
+        let text = serde_json::to_string(&output).expect("output serializes");
+        let back: MatchOutput = serde_json::from_str(&text).expect("output round-trips");
+
+        assert_eq!(back.matches.len(), 1);
+        assert_eq!(back.matches[0].driver_id, "drv_001");
+        assert_eq!(back.matches[0].request_id, "req_fema");
+        // Deadhead is zero (driver starts at pickup), so welfare is payout * 6.0 + delivery * 0.2.
+        assert!(back.matches[0].welfare_score > 600.0);
+    }
+
+    #[test]
+    fn h3_grid_distance_self_is_zero() {
+        let cell = H3Cell::new("8844594245fffff", 8);
+        assert_eq!(cell.grid_distance(&cell), 0);
+    }
+
+    #[test]
+    fn h3_grid_distance_neighbor_is_one() {
+        let origin = h3o::CellIndex::try_from(0x8844594245fffff_u64).unwrap();
+        let neighbor = origin
+            .grid_disk::<Vec<_>>(1)
+            .into_iter()
+            .find(|c| *c != origin)
+            .expect("grid_disk(1) yields at least one neighbor");
+        let a = H3Cell::new(format!("{:x}", u64::from(origin)), 8);
+        let b = H3Cell::new(format!("{:x}", u64::from(neighbor)), 8);
+        assert_eq!(a.grid_distance(&b), 1);
+    }
+
+    #[test]
+    fn h3_grid_distance_invalid_hex_is_max() {
+        let good = H3Cell::new("8844594245fffff", 8);
+        let bad = H3Cell::new("not-hex", 8);
+        assert_eq!(good.grid_distance(&bad), u32::MAX);
+        assert_eq!(bad.grid_distance(&good), u32::MAX);
+    }
 
     #[test]
     fn test_driver_capacity_matrix_and_matching() {

@@ -1,6 +1,13 @@
+use ark_std::rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fmt;
+
+pub mod zk;
+pub use zk::{
+    commit, setup, to_centi, BandCommitmentCircuit, CustodyKeys, CustodyStatement, CustodyWitness,
+    CustodyZkProof, ZkError, RANGE_BITS, READINGS,
+};
 
 /// Hired and Non-Owned Auto (HNOA) insurance state machine states.
 /// Transition flow: IDLE -> EN_ROUTE -> IN_CUSTODY_RFID_VERIFIED -> COMPLETED
@@ -106,65 +113,6 @@ impl TemperatureInvariantChecker {
     }
 }
 
-/// Zero-Knowledge Chain-of-Custody Proof.
-/// Encapsulates cryptographic verification of driver identity, RFID scan validity,
-/// and cold-chain temperature invariants without revealing raw GPS trajectory or PII.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CustodyZkProof {
-    pub proof_type: String, // e.g. "Groth16-Poseidon-Custody-v1"
-    pub public_inputs_hash: String,
-    pub commitment_root: String,
-    pub proof_bytes_hex: String,
-    pub timestamp_epoch_s: u64,
-}
-
-impl CustodyZkProof {
-    /// Generates a mock/arkworks-style ZK proof for chain-of-custody verification.
-    pub fn generate_proof(
-        package_id: &str,
-        driver_id: &str,
-        rfid_event: &RfidScanEvent,
-        temp_checker: &TemperatureInvariantChecker,
-    ) -> Result<Self, &'static str> {
-        if !rfid_event.verify_signature() {
-            return Err("Invalid RFID cryptographic signature; proof generation failed");
-        }
-        if temp_checker.excursion_detected {
-            return Err("Temperature invariant breached; cannot generate compliant proof");
-        }
-
-        let mut hasher = Sha256::new();
-        hasher.update(package_id.as_bytes());
-        hasher.update(driver_id.as_bytes());
-        let commitment_root = rfid_event.compute_commitment();
-        hasher.update(commitment_root.as_bytes());
-        let public_inputs = format!("{:x}", hasher.finalize());
-
-        // Simulated Arkworks Groth16 / Plonk proof structure
-        let mut proof_hasher = Sha256::new();
-        proof_hasher.update(b"ARKWORKS_GROTH16_PROOF_CIRCUIT_CUSTODY_V1");
-        proof_hasher.update(public_inputs.as_bytes());
-        let proof_bytes_hex = format!("{:x}", proof_hasher.finalize());
-
-        Ok(Self {
-            proof_type: "Arkworks-Groth16-Custody-v1".to_string(),
-            public_inputs_hash: public_inputs,
-            commitment_root,
-            proof_bytes_hex,
-            timestamp_epoch_s: rfid_event.timestamp_epoch_s,
-        })
-    }
-
-    /// Verifies the ZK proof against the public inputs.
-    pub fn verify(&self) -> bool {
-        let mut proof_hasher = Sha256::new();
-        proof_hasher.update(b"ARKWORKS_GROTH16_PROOF_CIRCUIT_CUSTODY_V1");
-        proof_hasher.update(self.public_inputs_hash.as_bytes());
-        let expected_proof = format!("{:x}", proof_hasher.finalize());
-        self.proof_bytes_hex == expected_proof
-    }
-}
-
 /// HNOA (Hired and Non-Owned Auto) Insurance Policy & State Machine Tracker.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HnoaCustodyTracker {
@@ -200,25 +148,40 @@ impl HnoaCustodyTracker {
         Ok(())
     }
 
-    /// Transition to IN_CUSTODY_RFID_VERIFIED upon physical RFID scan & ZK proof validation.
-    pub fn transition_to_in_custody(
+    /// Transition to IN_CUSTODY_RFID_VERIFIED upon physical RFID scan & ZK proof generation.
+    /// The caller supplies the private readings and blinding; the proof shows they lie
+    /// within this tracker's band and open the returned commitment `C`.
+    pub fn transition_to_in_custody<R: RngCore + CryptoRng>(
         &mut self,
         rfid_event: &RfidScanEvent,
         timestamp: u64,
+        keys: &CustodyKeys,
+        witness: &CustodyWitness,
+        rng: &mut R,
     ) -> Result<CustodyZkProof, &'static str> {
         if self.current_state != HnoaState::EnRoute {
-            return Err("Invalid transition: must be EN_ROUTE to transition to IN_CUSTODY_RFID_VERIFIED");
+            return Err(
+                "Invalid transition: must be EN_ROUTE to transition to IN_CUSTODY_RFID_VERIFIED",
+            );
+        }
+        if !rfid_event.verify_signature() {
+            return Err("Invalid RFID cryptographic signature; proof generation failed");
+        }
+        if self.temp_checker.excursion_detected {
+            return Err("Temperature invariant breached; cannot generate compliant proof");
         }
 
-        // Generate and verify proof
-        let proof = CustodyZkProof::generate_proof(
-            &self.package_id,
-            &self.driver_id,
-            rfid_event,
-            &self.temp_checker,
-        )?;
+        let statement = CustodyStatement::for_witness(
+            witness,
+            to_centi(self.temp_checker.min_allowed_celsius),
+            to_centi(self.temp_checker.max_allowed_celsius),
+        );
+        let proof =
+            CustodyZkProof::generate_proof(keys, witness, &statement, rng).map_err(|_| {
+                "ZK proof generation failed: reading outside band or commitment mismatch"
+            })?;
 
-        if !proof.verify() {
+        if !proof.verify(&keys.verifying_key, &statement) {
             return Err("ZK proof verification failed");
         }
 
@@ -244,7 +207,9 @@ impl HnoaCustodyTracker {
     /// Transition to COMPLETED upon drop-off delivery confirmation.
     pub fn complete_delivery(&mut self, timestamp: u64) -> Result<(), &'static str> {
         if self.current_state != HnoaState::InCustodyRfidVerified {
-            return Err("Invalid transition: must be IN_CUSTODY_RFID_VERIFIED to complete delivery");
+            return Err(
+                "Invalid transition: must be IN_CUSTODY_RFID_VERIFIED to complete delivery",
+            );
         }
         self.current_state = HnoaState::Completed;
         self.state_history.push((HnoaState::Completed, timestamp));
@@ -255,6 +220,22 @@ impl HnoaCustodyTracker {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn test_rng() -> ark_std::rand::rngs::StdRng {
+        use ark_std::rand::SeedableRng;
+        ark_std::rand::rngs::StdRng::seed_from_u64(7)
+    }
+
+    fn test_keys() -> CustodyKeys {
+        setup(&mut test_rng()).expect("dev setup")
+    }
+
+    fn in_band_witness(temp_centi: i64) -> CustodyWitness {
+        CustodyWitness {
+            readings_centi: [temp_centi; READINGS],
+            blinding: ark_bn254::Fr::from(12345u64),
+        }
+    }
 
     #[test]
     fn test_hnoa_state_machine_and_zk_proof() {
@@ -277,10 +258,14 @@ mod tests {
         };
 
         // Transition to IN_CUSTODY_RFID_VERIFIED
-        let proof_res = tracker.transition_to_in_custody(&rfid_event, 150);
+        let keys = test_keys();
+        let witness = in_band_witness(450);
+        let proof_res =
+            tracker.transition_to_in_custody(&rfid_event, 150, &keys, &witness, &mut test_rng());
         assert!(proof_res.is_ok());
         let proof = proof_res.unwrap();
-        assert!(proof.verify());
+        let statement = CustodyStatement::for_witness(&witness, 200, 800);
+        assert!(proof.verify(&keys.verifying_key, &statement));
         assert_eq!(tracker.current_state, HnoaState::InCustodyRfidVerified);
 
         // Record normal temperature
@@ -310,7 +295,15 @@ mod tests {
             signature_hex: "aabbccddee112233".to_string(),
             location_h3: "8844594245fffff".to_string(),
         };
-        tracker.transition_to_in_custody(&rfid_event, 110).unwrap();
+        tracker
+            .transition_to_in_custody(
+                &rfid_event,
+                110,
+                &test_keys(),
+                &in_band_witness(450),
+                &mut test_rng(),
+            )
+            .unwrap();
 
         // 3 consecutive spikes > 8.0 C
         let temp_spike = TemperatureTelemetry {
@@ -340,7 +333,13 @@ mod tests {
             location_h3: "8844594245fffff".to_string(),
         };
 
-        let res = tracker.transition_to_in_custody(&malicious_rfid, 110);
+        let res = tracker.transition_to_in_custody(
+            &malicious_rfid,
+            110,
+            &test_keys(),
+            &in_band_witness(100),
+            &mut test_rng(),
+        );
         assert!(res.is_err());
         assert_eq!(tracker.current_state, HnoaState::EnRoute);
     }

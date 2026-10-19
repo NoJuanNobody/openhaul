@@ -1,6 +1,6 @@
 # FEMA Emergency Logistics Bid Kit & Federal Contracting Specification
 **Document ID:** `OH-FED-FEMA-2026-V1`  
-**Consortium:** OpenHaul Decentralized Logistics Consortium  
+**Contracting Entity:** [OPENHAUL LLC — legal name pending formation; COUNSEL TO CONFIRM]  
 **NAICS Codes:**  
 - **488510** — Freight Transportation Arrangement (Logistics & Expedited Dispatch Facilitation)  
 - **492110** — Couriers and Express Delivery Services (Last-Mile Emergency Response & Cold-Chain)  
@@ -41,13 +41,13 @@ Leveraging the open **Short-Haul Transport Messaging Protocol (STMP)**, Zero-Kno
 
 | Entity Identifier | Registration & Compliance Specification | Verification Status |
 | :--- | :--- | :--- |
-| **Unique Entity ID (UEI)** | `OHL1M99ZK88FEMA` | Active (SAM.gov validated) |
-| **CAGE Code** | `9HK04` | Defense Logistics Agency (DLA) Active |
-| **Primary NAICS** | **488510** (Freight Transportation Arrangement) | Registered Small Business Concern |
+| **Unique Entity ID (UEI)** | `OHL1M99ZK88FEMA` | [TO VERIFY AGAINST SOURCE RECORD BEFORE SUBMISSION: UEI active in SAM.gov] |
+| **CAGE Code** | `9HK04` | [TO VERIFY AGAINST SOURCE RECORD BEFORE SUBMISSION: CAGE code active with DLA] |
+| **Primary NAICS** | **488510** (Freight Transportation Arrangement) | [TO VERIFY AGAINST SOURCE RECORD BEFORE SUBMISSION: small business status] |
 | **Secondary NAICS** | **492110** (Couriers and Express Delivery Services) | Specialized Express Cargo / Cold-Chain |
-| **FAR Compliance** | FAR Part 12 (Commercial Items), FAR Part 13 (SAP), FAR Part 26 (Disaster or Emergency Response) | Full Compliance / Attestation Filed |
-| **Cybersecurity** | NIST SP 800-171 & CMMC Level 2 (Rust / WebAssembly cryptographic stack) | Audit Passed |
-| **Disaster Response Registry** | Included in SAM.gov Disaster Response Registry (Stafford Act §307 preference) | Tier-1 Rapid Deployment |
+| **FAR Compliance** | FAR Part 12 (Commercial Items), FAR Part 13 (SAP), FAR Part 26 (Disaster or Emergency Response) | [TO VERIFY AGAINST SOURCE RECORD BEFORE SUBMISSION: FAR compliance and attestation filing] |
+| **Cybersecurity** | NIST SP 800-171 & CMMC Level 2 (Rust / WebAssembly cryptographic stack) | [TO VERIFY AGAINST SOURCE RECORD BEFORE SUBMISSION: NIST SP 800-171 and CMMC Level 2 audit result] |
+| **Disaster Response Registry** | Listing in SAM.gov Disaster Response Registry (Stafford Act §307 preference) | [TO VERIFY AGAINST SOURCE RECORD BEFORE SUBMISSION: Disaster Response Registry listing] |
 
 ---
 
@@ -98,17 +98,17 @@ OpenHaul utilizes an automated Model Context Protocol (MCP) bridge directly conn
   "psc_code": "V112",
   "scope": "EMERGENCY_LAST_MILE_LOGISTICS_DISASTER_DISTRIBUTION",
   "pricing_model": {
-    "rate_per_dispatch_mile": 3.85,
-    "hourly_standby_rate": 42.00,
+    "rate_per_dispatch_mile": 2.40,
+    "hourly_standby_rate": 38.00,
     "flat_expedited_fema_fee_per_haul": 75.00,
     "cold_chain_zk_telemetry_fee": 12.50
   },
   "insurance_compliance": {
-    "hnoa_policy_active": true,
-    "carrier_rating": "A+ (Superior) AM Best",
+    "hnoa_policy_active": "[TO VERIFY AGAINST SOURCE RECORD BEFORE SUBMISSION: HNOA policy in force]",
+    "carrier_rating": "[TO VERIFY AGAINST SOURCE RECORD BEFORE SUBMISSION: carrier rating]",
     "primary_liability_limit": 1000000,
     "cargo_transit_limit": 250000,
-    "fema_additional_insured_endorsement": "FORM_CG_20_26_ATTACHED"
+    "fema_additional_insured_endorsement": "[TO VERIFY AGAINST SOURCE RECORD BEFORE SUBMISSION: FORM_CG_20_26 attached]"
   },
   "contingency_sla": {
     "mesh_network_offline_capable": true,
@@ -141,10 +141,10 @@ OpenHaul structures its disaster logistics pricing under pre-negotiated, transpa
 Any automated or expedited bid submitted by OpenHaul under an active Emergency Declaration includes the following pre-compiled documentation package:
 
 1. **Standard Form 1449 (SF-1449):** Solicitation/Contract/Order for Commercial Items.
-2. **Representations & Certifications:** SAM.gov Reps & Certs FAR 52.212-3 Current Validation.
-3. **Certificate of Insurance (COI):** Acord 25 showing $1M Hired & Non-Owned Auto Liability, $250k Motor Truck Cargo, and $5M Commercial General Liability with FEMA/DHS named as Additional Insured.
-4. **Stafford Act Local Preference Attestation (FAR 52.226-3 / 52.226-4):** Verification that regional driver pool resides within declared disaster counties.
-5. **Driver Safety & Background Audit:** Cryptographic confirmation that all assigned operators possess active Motor Vehicle Records (MVR) screening, valid commercial driver credentials, and background clearance.
+2. **Representations & Certifications:** [TO VERIFY AGAINST SOURCE RECORD BEFORE SUBMISSION: SAM.gov Reps & Certs FAR 52.212-3 current validation].
+3. **Certificate of Insurance (COI):** Acord 25 showing $1M Hired & Non-Owned Auto Liability, $250k Motor Truck Cargo, and $5M Commercial General Liability with FEMA/DHS named as Additional Insured. [TO VERIFY AGAINST SOURCE RECORD BEFORE SUBMISSION: COI limits and additional-insured status]
+4. **Stafford Act Local Preference Attestation (FAR 52.226-3 / 52.226-4):** [TO VERIFY AGAINST SOURCE RECORD BEFORE SUBMISSION: regional driver pool resides within declared disaster counties].
+5. **Driver Safety & Background Audit:** [TO VERIFY AGAINST SOURCE RECORD BEFORE SUBMISSION: all assigned operators possess active Motor Vehicle Records (MVR) screening, valid commercial driver credentials, and background clearance].
 6. **STMP Telemetry Gateway Credentials:** Provisioning of real-time API keys and web dashboard credentials for FEMA Logistics Operations Center (LOC) visual monitoring.
 
 ---
