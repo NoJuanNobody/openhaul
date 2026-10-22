@@ -288,5 +288,7 @@ def build_financial_model(output_path: str):
     print(f"Financial Model successfully generated at: {output_path}")
 
 if __name__ == "__main__":
-    out_file = "/Users/alejandrolondono/dev/openhaul/biz/OpenHaul_Financial_Model.xlsx"
+    # Use relative path based on script location for cross-platform compatibility
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    out_file = os.path.join(script_dir, "OpenHaul_Financial_Model.xlsx")
     build_financial_model(out_file)
